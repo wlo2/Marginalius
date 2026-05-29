@@ -1,0 +1,28 @@
+{
+	"name": "obsidian-marginalius",
+	"version": "0.1",
+	"description": "Adaptive marginalia plugin for Obsidian",
+	"main": "main.js",
+	"type": "module",
+	"scripts": {
+		"dev": "env -u npm_config_devdir node esbuild.config.mjs",
+		"build": "env -u npm_config_devdir tsc -noEmit -skipLibCheck && env -u npm_config_devdir node esbuild.config.mjs production"
+	},
+	"keywords": [
+		"obsidian",
+		"plugin",
+		"marginalia",
+		"cornell",
+		"sidenote"
+	],
+	"license": "MIT",
+	"devDependencies": {
+		"@types/node": "^16.11.6",
+		"esbuild": "0.25.5",
+		"tslib": "2.4.0",
+		"typescript": "^5.8.3"
+	},
+	"dependencies": {
+		"obsidian": "latest"
+	}
+}
