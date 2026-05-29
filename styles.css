@@ -1,0 +1,275 @@
+/* ==========================================
+   MARGINALIUS: ADAPTIVE MARGINALIA PLUGIN
+   ========================================== */
+
+/* Container registration to measure the pane's width */
+.markdown-reading-view,
+.markdown-source-view {
+    container-name: PageContainer;
+    container-type: inline-size;
+}
+
+/* ==========================================
+   BASE AND CLEANUP STYLES
+   ========================================== */
+
+/* Remove default callout borders, backgrounds, and shadows for margin/margin-r */
+.callout[data-callout="margin"],
+.callout[data-callout="margin-r"] {
+    --callout-color: transparent;
+    border: none !important;
+    box-shadow: none !important;
+    background-color: transparent !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+    position: relative !important;
+    z-index: 10 !important;
+    pointer-events: auto !important;
+}
+
+/* Collapse CodeMirror Live Preview wrappers to prevent blank lines in Editing Mode */
+.cm-callout:has(.callout[data-callout="margin"]),
+.cm-callout:has(.callout[data-callout="margin-r"]) {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 0 !important;
+    overflow: visible !important;
+    contain: none !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Hide callout titles and icons completely */
+.callout[data-callout="margin"] .callout-title,
+.callout[data-callout="margin-r"] .callout-title {
+    display: none !important;
+}
+
+/* Format content and paragraphs to be compact and readable */
+.callout[data-callout="margin"] .callout-content,
+.callout[data-callout="margin-r"] .callout-content {
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    min-width: 0 !important;
+}
+
+/* Paragraph styling inside callout */
+.callout[data-callout="margin"] .callout-content p,
+.callout[data-callout="margin-r"] .callout-content p {
+    margin: 0 0 6px 0 !important;
+    padding: 0 !important;
+    line-height: 1.4 !important;
+    font-size: 13px !important;
+    color: inherit !important;
+}
+
+.callout[data-callout="margin"] .callout-content p:last-child,
+.callout[data-callout="margin-r"] .callout-content p:last-child {
+    margin-bottom: 0 !important;
+}
+
+/*
+   CRITICAL WRAPPING RULES:
+   Force absolute non-breaking of standard words on the callout AND every node
+   inside it. This prevents "write" from splitting into "writ" and "e".
+
+   Why target the callout itself and ALL descendants (not just .callout-content):
+   In Reading view the text lives in `.callout-content > p`, but in Live Preview
+   (the editing view) Obsidian renders the body inside CodeMirror's own elements
+   (`.cm-content` / `.cm-line`). Those inherit CodeMirror's line-wrapping default
+   `overflow-wrap: anywhere`, which breaks words at ANY character inside a narrow
+   box. We override it with `break-word` (only breaks a token that is longer than
+   the whole line, never a normal word) on every relevant element.
+*/
+.callout[data-callout="margin"],
+.callout[data-callout="margin-r"],
+.callout[data-callout="margin"] *,
+.callout[data-callout="margin-r"] *,
+.callout[data-callout="margin"] .cm-content,
+.callout[data-callout="margin-r"] .cm-content,
+.callout[data-callout="margin"] .cm-line,
+.callout[data-callout="margin-r"] .cm-line {
+    word-break: normal !important;
+    overflow-wrap: break-word !important;
+    word-wrap: break-word !important;
+    white-space: normal !important;
+    line-break: auto !important;
+    hyphens: none !important;
+    -webkit-hyphens: none !important;
+}
+
+/*
+   Stop the inner text containers from shrinking to their min-content width.
+   `overflow-wrap: anywhere` makes a word's min-content width one character wide,
+   which (in a float/flex context) can collapse the column and force per-character
+   wrapping. Forcing the containers to fill the fixed-width box keeps lines wrapping
+   on word boundaries and keeps the text inside the marginalia box.
+*/
+.callout[data-callout="margin"] .callout-content,
+.callout[data-callout="margin-r"] .callout-content,
+.callout[data-callout="margin"] .cm-content,
+.callout[data-callout="margin-r"] .cm-content,
+.callout[data-callout="margin"] .cm-line,
+.callout[data-callout="margin-r"] .cm-line {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    flex: none !important;
+}
+
+/* Ensure inline formatting elements render naturally */
+.callout[data-callout="margin"] .callout-content *,
+.callout[data-callout="margin-r"] .callout-content * {
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Base text color on callout text content across themes */
+.callout[data-callout="margin"] .callout-content,
+.callout[data-callout="margin-r"] .callout-content {
+    color: var(--text-normal, #e0e0e0) !important;
+}
+
+/* Ensure inner elements allow overflow and rendering in editor */
+.markdown-source-view.mod-cm6 .cm-content > .cm-callout[contenteditable=false] {
+    overflow: visible;
+    contain: none !important;
+}
+
+/* Hide the edit button that appears on hover in Live Preview */
+.cm-callout:has(.callout[data-callout="margin"]) > .edit-block-button,
+.cm-callout:has(.callout[data-callout="margin-r"]) > .edit-block-button {
+    display: none !important;
+}
+
+/* ==========================================
+   STYLE 1: NARROW DISPLAY / HALF-EMBEDDED (DEFAULT)
+   ========================================== */
+
+/* Left marginalia [!margin] - Floats left inside text body, rounded box */
+.callout[data-callout="margin"] {
+    float: left !important;
+    clear: left !important;
+    width: var(--marginalius-intrusive-width, 200px) !important;
+    max-width: 45% !important;
+    margin-left: 0 !important;
+    margin-right: var(--marginalius-margin, 20px) !important;
+    margin-top: 6px !important;
+    margin-bottom: 8px !important;
+    background-color: var(--background-secondary, #2a2a2a) !important;
+    border: none !important;
+    border-right: 2px solid var(--border-color, var(--color-base-30, rgba(128, 128, 128, 0.4))) !important;
+    border-radius: 6px !important;
+    padding: 10px 14px !important;
+    text-align: left !important;
+}
+
+/* Right marginalia [!margin-r] - Floats right inside text body, rounded box */
+.callout[data-callout="margin-r"] {
+    float: right !important;
+    clear: right !important;
+    width: var(--marginalius-intrusive-width, 200px) !important;
+    max-width: 45% !important;
+    margin-right: 0 !important;
+    margin-left: var(--marginalius-margin, 20px) !important;
+    margin-top: 6px !important;
+    margin-bottom: 8px !important;
+    background-color: var(--background-secondary, #2a2a2a) !important;
+    border: none !important;
+    border-left: 2px solid var(--border-color, var(--color-base-30, rgba(128, 128, 128, 0.4))) !important;
+    border-radius: 6px !important;
+    padding: 10px 14px !important;
+    text-align: left !important;
+}
+
+/* ==========================================
+   STYLE 2: WIDESCREEN / CORNELL MARGIN (>= 1000px)
+   ========================================= */
+
+@container PageContainer (width >= 1000px) {
+    /*
+       Dynamic sizing for the pulled-out Cornell notes.
+
+       The text body is centered at the readable line width (`--file-line-width`,
+       700px by default), leaving a gutter of `(paneWidth - lineWidth) / 2` on
+       each side. `100cqi` resolves to the pane width (the PageContainer's inline
+       size), so the space available for a pulled-out note is:
+
+           gutter = (100cqi - var(--file-line-width)) / 2
+
+       We size the note to the smaller of the configured width and the gutter
+       (minus the gap to the body), so when the pane narrows (e.g. a sidebar is
+       expanded) the note shrinks to stay flush against the pane edge instead of
+       being clipped. `--marginalius-fit` is reused for the negative pull-out
+       margin so the box and its offset always stay in sync.
+    */
+    .callout[data-callout="margin"],
+    .callout[data-callout="margin-r"] {
+        --marginalius-gutter: calc((100cqi - var(--file-line-width, 700px)) / 2);
+        /* Extra separation from the body text. Added to the pull-out distance
+           AND subtracted from the width, so the gap to the body grows while the
+           note's outer edge stays flush against the pane. Reading view overrides
+           this below because its rendered text sits closer to the gutter. */
+        --marginalius-edge: 0px;
+        --marginalius-fit: max(
+            0px,
+            min(
+                var(--marginalius-width, 200px),
+                calc(var(--marginalius-gutter) - var(--marginalius-margin, 20px) - var(--marginalius-edge))
+            )
+        );
+    }
+
+    /* Left marginalia [!margin] - Pulled out into left margin, right-aligned, transparent */
+    .callout[data-callout="margin"] {
+        float: left !important;
+        clear: left !important;
+        width: var(--marginalius-fit) !important;
+        max-width: none !important;
+        margin-left: calc(-1 * var(--marginalius-fit) - var(--marginalius-margin, 20px) - var(--marginalius-edge)) !important;
+        margin-right: var(--marginalius-margin, 20px) !important;
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+        background-color: transparent !important;
+        border: none !important;
+        border-right: 2px solid var(--border-color, var(--color-base-30, rgba(128, 128, 128, 0.4))) !important;
+        border-radius: 0 !important;
+        padding: 0 12px 0 0 !important;
+        text-align: right !important;
+    }
+    
+    .callout[data-callout="margin"] .callout-content {
+        color: var(--text-muted, #888888) !important;
+    }
+
+    /* Right marginalia [!margin-r] - Pulled out into right margin, left-aligned, transparent */
+    .callout[data-callout="margin-r"] {
+        float: right !important;
+        clear: right !important;
+        width: var(--marginalius-fit) !important;
+        max-width: none !important;
+        margin-right: calc(-1 * var(--marginalius-fit) - var(--marginalius-margin, 20px) - var(--marginalius-edge)) !important;
+        margin-left: var(--marginalius-margin, 20px) !important;
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+        background-color: transparent !important;
+        border: none !important;
+        border-left: 2px solid var(--border-color, var(--color-base-30, rgba(128, 128, 128, 0.4))) !important;
+        border-radius: 0 !important;
+        padding: 0 0 0 12px !important;
+        text-align: left !important;
+    }
+    
+    .callout[data-callout="margin-r"] .callout-content {
+        color: var(--text-muted, #888888) !important;
+    }
+
+    /* Reading view renders the body text slightly closer to the gutter than the
+       editor does, so the notes can graze the text. Add a little extra
+       separation here only; the editor (Live Preview) is left untouched. */
+    .markdown-reading-view .callout[data-callout="margin"],
+    .markdown-reading-view .callout[data-callout="margin-r"] {
+        --marginalius-edge: 12px;
+    }
+}
