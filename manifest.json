@@ -1,0 +1,10 @@
+{
+	"id": "obsidian-marginalius",
+	"name": "Marginalius",
+	"version": "0.1",
+	"minAppVersion": "1.0.0",
+	"description": "Renders adaptive marginalia via margin/margin-r callouts.",
+	"author": "wlo2",
+	"authorUrl": "https://github.com/darkhipov/Marginalius",
+	"isDesktopOnly": false
+}
