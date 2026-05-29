@@ -1,6 +1,6 @@
 # Marginalius
 
-https://github.com/user-attachments/assets/Demonstration.mov
+https://github.com/wlo2/Marginalius/raw/main/Demonstration.mov
 
 An Obsidian plugin for **adaptive marginalia** — Tufte/Cornell-style side notes that live in the page margins on wide screens and gracefully fall back to compact, embedded note boxes when space is tight.
 
