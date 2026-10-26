@@ -1,22 +1,30 @@
-import { MarkdownPostProcessorContext, MarkdownRenderChild } from "obsidian";
+import { MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownRenderer } from "obsidian";
 import type MarginaliusPlugin from "./main";
 import { renderNote } from "./note";
 import { trackNote, untrackNote } from "./placement";
 import { findMarginalia } from "./parser";
 
+type Match = ReturnType<typeof findMarginalia>[number];
+
 /**
  * Reading-view rendering of the inline `%%> … %%` syntax.
  *
  * Obsidian strips comments before rendering, so the marker is gone from the
- * rendered DOM. We recover the raw markdown for the block via
- * `getSectionInfo()`, find any marginalia, and inject each note into the list
- * item it sits in, or into the block (paragraph) otherwise. In the margin
- * layout styles.css centers the note on the height of that element.
+ * rendered DOM. We find the marginalia in the raw markdown of the whole note
+ * and, for each section (block) `getSectionInfo()` reports, inject the notes
+ * that start in it into the list item they sit in, or into the block
+ * otherwise. In the margin layout styles.css centers the note on the height
+ * of that element.
+ *
+ * Obsidian only strips a comment within one paragraph. A note that crosses a
+ * blank line shows as text: in each section it spans, or in the list item
+ * holding it. Those sections are rendered again without the note.
  */
 export function registerReadingView(plugin: MarginaliusPlugin): void {
-	// Every section of a render shares one document text; split it once.
-	let cachedText = "";
-	let cachedLines: string[] = [];
+	// Every section of a render shares one document text; parse it once.
+	let cachedText: string | undefined;
+	let lineStarts: number[] = [];
+	let matches: Match[] = [];
 
 	plugin.registerMarkdownPostProcessor(
 		async (el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
@@ -28,25 +36,41 @@ export function registerReadingView(plugin: MarginaliusPlugin): void {
 			const text = info.text || (file ? await plugin.app.vault.cachedRead(file) : "");
 			if (text !== cachedText) {
 				cachedText = text;
-				cachedLines = text.split("\n");
+				lineStarts = [0];
+				for (let i = text.indexOf("\n"); i !== -1; i = text.indexOf("\n", i + 1)) lineStarts.push(i + 1);
+				matches = findMarginalia(text);
 			}
-			const sectionText = cachedLines
-				.slice(info.lineStart, info.lineEnd + 1)
-				.join("\n");
+			const from = lineStarts[info.lineStart] ?? text.length;
+			const to = (lineStarts[info.lineEnd + 1] ?? text.length + 1) - 1;
 
-			const matches = findMarginalia(sectionText);
-			if (matches.length === 0) return;
+			const inSection = matches.filter((m) => m.from < to && m.to > from);
+			if (inSection.length === 0) return;
 
 			// Obsidian unloads this once the section is re-rendered or removed.
 			const child = new MarkdownRenderChild(el);
 			ctx.addChild(child);
 
+			const rerender = inSection.some(
+				(m) => m.from < from || m.to > to || /\n[ \t]*\n/.test(text.slice(m.from, m.to))
+			);
+			if (rerender) {
+				const visible = textOutsideNotes(text, inSection, from, to);
+				el.empty();
+				if (!visible.trim()) {
+					el.addClass("marginalia-hidden");
+				} else {
+					await MarkdownRenderer.render(plugin.app, visible, el, ctx.sourcePath, child);
+				}
+			}
+
 			// Insert in reverse so successive insertBefore calls keep source order.
-			for (let i = matches.length - 1; i >= 0; i--) {
-				const match = matches[i];
+			const starting = inSection.filter((m) => m.from >= from);
+			for (let i = starting.length - 1; i >= 0; i--) {
+				const match = starting[i];
 				if (!match) continue;
-				const line = sectionText.slice(0, match.from).split("\n").length - 1;
-				const anchor = anchorFor(el, line);
+				const anchor = rerender
+					? itemAt(el, textOutsideNotes(text, inSection, from, match.from))
+					: anchorFor(el, lineOf(lineStarts, match.from) - info.lineStart);
 				const note = renderNote(
 					plugin.app,
 					match.side,
@@ -54,12 +78,38 @@ export function registerReadingView(plugin: MarginaliusPlugin): void {
 					ctx.sourcePath,
 					child
 				);
+				// Classes instead of `:has()` in styles.css, which is slow to restyle.
+				anchor.addClass("marginalia-anchor");
+				if (anchor.querySelector(":scope > ul, :scope > ol")) note.addClass("marginalia-on-sublist");
 				anchor.insertBefore(note, anchor.firstChild);
 				trackNote(note);
 				child.register(() => untrackNote(note));
 			}
 		}
 	);
+}
+
+/** The markdown of `text[from, to)` with every note in it cut out. */
+export function textOutsideNotes(text: string, notes: Match[], from: number, to: number): string {
+	let visible = "";
+	let pos = from;
+	for (const note of notes) {
+		visible += text.slice(pos, Math.min(note.from, to));
+		pos = Math.max(pos, note.to);
+	}
+	return visible + text.slice(pos, to);
+}
+
+/** Index of the line holding `offset`, given each line's start offset. */
+function lineOf(lineStarts: number[], offset: number): number {
+	let lo = 0;
+	let hi = lineStarts.length - 1;
+	while (lo < hi) {
+		const mid = (lo + hi + 1) >> 1;
+		if ((lineStarts[mid] ?? 0) <= offset) lo = mid;
+		else hi = mid - 1;
+	}
+	return lo;
 }
 
 /**
@@ -72,4 +122,15 @@ export function anchorFor(section: HTMLElement, line: number): HTMLElement {
 		if (Number(li.dataset.line) <= line) anchor = li;
 	});
 	return anchor;
+}
+
+/**
+ * `MarkdownRenderer` output has no `data-line`, so in a re-rendered section
+ * the note goes on the list item started last in the markdown before it.
+ * shortcut: counts lines that look like list items, also inside code blocks
+ * or block quotes; read the list structure if that misplaces notes.
+ */
+export function itemAt(section: HTMLElement, markdownBefore: string): HTMLElement {
+	const started = markdownBefore.split("\n").filter((l) => /^\s*(?:[-*+]|\d+[.)])\s/.test(l)).length;
+	return section.querySelectorAll<HTMLElement>("li")[started - 1] ?? section;
 }

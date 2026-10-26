@@ -80,6 +80,8 @@ class MarginaliaWidget extends WidgetType {
 	}
 }
 
+const noteLine = Decoration.line({ class: "marginalia-line" });
+
 // shortcut: rescans the whole note on every edit or cursor move; fine for
 // notes up to ~1 MB, switch to incremental parsing if huge notes lag.
 function buildDecorations(state: EditorState, app: App): DecorationSet {
@@ -104,6 +106,8 @@ function buildDecorations(state: EditorState, app: App): DecorationSet {
 		// the widget is not inside that note's hidden range.)
 		const lineStart = Math.max(state.doc.lineAt(match.from).from, previousEnd);
 		const widget = new MarginaliaWidget(match.content, match.side, app, sourcePath);
+		// The class lets styles.css open the line's overflow without `:has()`.
+		decorations.push(noteLine.range(state.doc.lineAt(lineStart).from));
 		decorations.push(Decoration.widget({ widget, side: -1 }).range(lineStart));
 		decorations.push(Decoration.replace({}).range(match.from, match.to));
 		previousEnd = match.to;
@@ -123,6 +127,12 @@ export function createMarginaliaLivePreview(app: App) {
 			tr.docChanged || tr.selection
 				? buildDecorations(tr.state, app)
 				: decorations,
-		provide: (field) => EditorView.decorations.from(field),
+		provide: (field) => [
+			EditorView.decorations.from(field),
+			// Marks an editor showing notes, so styles.css can open its overflow.
+			EditorView.contentAttributes.compute([field], (state): Record<string, string> =>
+				state.field(field).size ? { class: "marginalia-has-notes" } : {}
+			),
+		],
 	});
 }

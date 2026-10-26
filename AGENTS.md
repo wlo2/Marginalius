@@ -19,7 +19,8 @@ When a rule here and the official docs disagree, the docs win. Update this file.
   - `npm run lint`: ESLint with `eslint-plugin-obsidianmd`'s recommended rules, the same guidelines Obsidian's automated review checks. Test and build files run in Node, so `eslint.config.mjs` turns off the Node-module and `globalThis` rules for them.
 - Release files: `main.js`, `manifest.json` and `styles.css`. To test by hand, copy them to `<Vault>/.obsidian/plugins/<plugin-id>/`, reload Obsidian and enable the plugin in **Settings → Community plugins**.
 - Keep `main.ts` to the plugin lifecycle (load, unload, registering things). Give every other file one job, and split a file that grows past roughly 200–300 lines by job.
-- Releases: tag each one exactly as the manifest `version` (latest `0.2.1`), with no `v` (the earlier `v0.1` tag broke that rule).
+- Releases: tag each one exactly as the manifest `version` (next `0.2.2`), with no `v` (the earlier `v0.1` tag broke that rule).
+- Release only by pushing that tag. `.github/workflows/release.yml` runs the tests and Obsidian's `obsidian-workflows` action, which builds, attests `main.js` and `styles.css`, and creates a draft release; then publish the draft. Never upload release files by hand: they would have no artifact attestation, which the directory's scorecard checks.
 - Decision: `onload()` sets the CSS variables and registers the editor extension and Reading view processor directly, not in `onLayoutReady()`. It's cheap, and waiting would draw notes with default sizes first and then make them jump (see section 9).
 
 ## 1. Manifest, versions and releases

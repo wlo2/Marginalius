@@ -5,7 +5,7 @@ import { EditorView } from "@codemirror/view";
 import { editorInfoField, notices } from "obsidian";
 import { findMarginalia, markerLength } from "../src/parser";
 import { createMarginaliaLivePreview } from "../src/live-preview";
-import { anchorFor } from "../src/reading-view";
+import { anchorFor, itemAt, textOutsideNotes } from "../src/reading-view";
 import { insertMarginalia } from "../src/commands";
 import { measure, place, refreshPlacement } from "../src/placement";
 
@@ -79,6 +79,25 @@ test("reading view: a note goes on the list item holding its line", () => {
 	assert.equal(anchorFor(paragraph, 1), paragraph);
 });
 
+test("reading view: a note crossing a blank line is cut from each section it spans", () => {
+	const text = "Second para. %%< right note\n\nwith two paragraphs %% after\n\nThird %%> x %% end";
+	const notes = findMarginalia(text);
+	const firstEnd = text.indexOf("\n");
+	const second = firstEnd + 2;
+	const secondEnd = text.indexOf("\n", second);
+	assert.equal(textOutsideNotes(text, notes, 0, firstEnd), "Second para. ");
+	assert.equal(textOutsideNotes(text, notes, second, secondEnd), " after");
+	// A section the note does not touch keeps everything but its own notes.
+	assert.equal(textOutsideNotes(text, notes, secondEnd + 2, text.length), "Third  end");
+
+	// A re-rendered list has no data-line: the note goes on the item started last before it.
+	const items = ["a", "b", "c"];
+	const list = { querySelectorAll: () => items } as unknown as HTMLElement;
+	assert.equal(itemAt(list, "- item "), "a");
+	assert.equal(itemAt(list, "- item \n  - nested\n- next "), "c");
+	assert.equal(itemAt(list, "Para "), list);
+});
+
 test("insert command: each selection keeps its own text", () => {
 	// "bar" selected backwards: anchor after it, head before it.
 	const two = fakeEditor("foo and bar", [[0, 3], [11, 8]]);
@@ -109,19 +128,24 @@ test("live preview: note drawn at its line start, marker hidden, cursor reveal, 
 
 	const doc = "before\n%%> line one\nline two %%\nafter %%< right %%";
 	let state = EditorState.create({ doc, extensions: [editorInfoField, field] });
-	// Each note: the drawn note at the start of its line, then the hidden marker.
-	// The second marker starts at 38 on the line that starts at 32.
-	assert.deepEqual(ranges(state), [[7, 7], [7, 31], [32, 32], [38, 50]]);
+	// Each note: the line class and the drawn note at the start of its line, then
+	// the hidden marker. The second marker starts at 38 on the line that starts at 32.
+	assert.deepEqual(ranges(state), [[7, 7], [7, 7], [7, 31], [32, 32], [32, 32], [38, 50]]);
 	assert.equal(state.facet(EditorView.decorations).length, 1);
+	assert.deepEqual(state.facet(EditorView.contentAttributes), [{ class: "marginalia-has-notes" }]);
 
 	state = state.update({ selection: EditorSelection.cursor(10) }).state;
-	assert.deepEqual(ranges(state), [[32, 32], [38, 50]]);
+	assert.deepEqual(ranges(state), [[32, 32], [32, 32], [38, 50]]);
 
 	state = state.update({
 		changes: { from: 0, insert: "xx" },
 		selection: EditorSelection.cursor(0),
 	}).state;
-	assert.deepEqual(ranges(state), [[9, 9], [9, 33], [34, 34], [40, 52]]);
+	assert.deepEqual(ranges(state), [[9, 9], [9, 9], [9, 33], [34, 34], [34, 34], [40, 52]]);
+
+	// No notes left: the editor loses its class.
+	state = state.update({ changes: { from: 0, to: state.doc.length, insert: "plain" } }).state;
+	assert.deepEqual(state.facet(EditorView.contentAttributes), [{}]);
 });
 
 /** Stand-ins for the browser layout APIs placement.ts reads. */

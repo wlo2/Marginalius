@@ -9,6 +9,10 @@
    drawn at the start of its marker's line (editor) or block (Reading view).
    While it fits, it is positioned absolutely beside the column and centered
    on its block; otherwise it is a floated box in the text (see placement.ts).
+
+   No !important: the box rules use `.marginalia.marginalia-left/right` and the
+   margin note rules `.is-readable-line-width .marginalia:not(...)`, so the
+   margin note wins over the box by specificity.
    ========================================== */
 
 /* Registered so it computes to px (an "em" value too), which placement.ts reads. */
@@ -19,9 +23,9 @@
 }
 
 .marginalia {
-    box-sizing: border-box !important;
-    position: relative !important;
-    z-index: 10 !important;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 10;
 }
 
 /*
@@ -35,13 +39,13 @@
 */
 .marginalia,
 .marginalia * {
-    word-break: normal !important;
-    overflow-wrap: break-word !important;
-    word-wrap: break-word !important;
-    white-space: normal !important;
-    line-break: auto !important;
-    hyphens: none !important;
-    -webkit-hyphens: none !important;
+    word-break: normal;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    white-space: normal;
+    line-break: auto;
+    hyphens: none;
+    -webkit-hyphens: none;
 }
 
 /*
@@ -52,28 +56,28 @@
    on word boundaries.
 */
 .marginalia .marginalia-content {
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
-    min-width: 0 !important;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
 }
 
 .marginalia .marginalia-content p {
-    margin: 0 0 6px 0 !important;
-    padding: 0 !important;
-    line-height: 1.4 !important;
-    font-size: 13px !important;
-    color: inherit !important;
+    margin: 0 0 6px 0;
+    padding: 0;
+    line-height: 1.4;
+    font-size: 13px;
+    color: inherit;
 }
 
 .marginalia .marginalia-content p:last-child {
-    margin-bottom: 0 !important;
+    margin-bottom: 0;
 }
 
 /* Let the floated note escape the editor line so it can sit in the gutter. */
-.cm-line:has(.marginalia),
-.markdown-source-view.mod-cm6 .cm-content:has(.marginalia) {
-    overflow: visible !important;
+.markdown-source-view .cm-line.marginalia-line,
+.markdown-source-view.mod-cm6 .cm-content.marginalia-has-notes {
+    overflow: visible;
 }
 
 /* ----- Box in the text (default) -----
@@ -83,25 +87,25 @@
    fitting stays where the margin note was and slides into the text as the
    pane narrows. `clear` stacks boxes on the same side instead of overlapping. */
 
-.marginalia-left {
-    float: left !important;
-    clear: left !important;
+.marginalia.marginalia-left {
+    float: left;
+    clear: left;
     /* Shrinks to fit short notes; long ones wrap at the configured width. */
-    width: auto !important;
-    max-width: min(var(--marginalius-intrusive-width, 200px), 45%) !important;
+    width: auto;
+    max-width: min(var(--marginalius-intrusive-width, 200px), 45%);
     /* Reach back over any indent of the note's block too (list items). */
     margin: 0 var(--marginalius-margin, 20px) 8px
-        calc(-1 * (var(--marginalius-room-left, 0px) + var(--marginalius-box-indent, 0px))) !important;
-    text-align: left !important;
+        calc(-1 * (var(--marginalius-room-left, 0px) + var(--marginalius-box-indent, 0px)));
+    text-align: left;
 }
 
-.marginalia-right {
-    float: right !important;
-    clear: right !important;
-    width: auto !important;
-    max-width: min(var(--marginalius-intrusive-width, 200px), 45%) !important;
-    margin: 0 calc(-1 * var(--marginalius-room-right, 0px)) 8px var(--marginalius-margin, 20px) !important;
-    text-align: left !important;
+.marginalia.marginalia-right {
+    float: right;
+    clear: right;
+    width: auto;
+    max-width: min(var(--marginalius-intrusive-width, 200px), 45%);
+    margin: 0 calc(-1 * var(--marginalius-room-right, 0px)) 8px var(--marginalius-margin, 20px);
+    text-align: left;
 }
 
 /* Liquid glass box: an even translucent tint with backdrop blur, a bright rim
@@ -124,27 +128,27 @@ body.theme-light {
     --marginalius-glass-edge: rgb(0 0 0 / 0.06);
 }
 
-.marginalia-left,
-.marginalia-right {
-    padding: 10px 14px !important;
-    border: none !important;
-    border-radius: 16px !important;
-    color: var(--text-normal, #e0e0e0) !important;
-    background: color-mix(in oklab, var(--background-secondary, #2a2a2a) 62%, transparent) !important;
+.marginalia.marginalia-left,
+.marginalia.marginalia-right {
+    padding: 10px 14px;
+    border: none;
+    border-radius: 16px;
+    color: var(--text-normal, #e0e0e0);
+    background: color-mix(in oklab, var(--background-secondary, #2a2a2a) 62%, transparent);
     backdrop-filter: blur(14px) saturate(170%);
     box-shadow:
         inset 0 0 0 1px var(--marginalius-glass-edge),
         inset 0 1px 0 rgb(var(--marginalius-glass-light) / calc(0.28 * var(--marginalius-glass-light-strength))),
         inset 0 -1px 0 rgb(var(--marginalius-glass-shade) / calc(0.22 * var(--marginalius-glass-shadow-strength))),
         0 10px 30px -8px rgb(var(--marginalius-glass-shade) / calc(0.55 * var(--marginalius-glass-shadow-strength))),
-        0 2px 6px rgb(var(--marginalius-glass-shade) / calc(0.25 * var(--marginalius-glass-shadow-strength))) !important;
+        0 2px 6px rgb(var(--marginalius-glass-shade) / calc(0.25 * var(--marginalius-glass-shadow-strength)));
     /* Padding eases between the margin note and the box, so the text inside
        does not jump by the difference when a note switches. */
     transition: padding 150ms, border-radius 150ms, box-shadow 150ms;
 }
 
-.marginalia-left::before,
-.marginalia-right::before {
+.marginalia.marginalia-left::before,
+.marginalia.marginalia-right::before {
     content: "";
     position: absolute;
     inset: 0;
@@ -169,15 +173,15 @@ body.theme-light {
 
 /* Reduce transparency / increase contrast (system settings): a solid box. */
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-    .marginalia-left,
-    .marginalia-right {
-        background: var(--background-secondary, #2a2a2a) !important;
+    .marginalia.marginalia-left,
+    .marginalia.marginalia-right {
+        background: var(--background-secondary, #2a2a2a);
         backdrop-filter: none;
-        box-shadow: inset 0 0 0 1px var(--background-modifier-border, rgb(128 128 128 / 0.5)) !important;
+        box-shadow: inset 0 0 0 1px var(--background-modifier-border, rgb(128 128 128 / 0.5));
     }
 
-    .marginalia-left::before,
-    .marginalia-right::before {
+    .marginalia.marginalia-left::before,
+    .marginalia.marginalia-right::before {
         content: none;
     }
 }
@@ -193,19 +197,19 @@ body.theme-light {
 .is-readable-line-width .marginalia:not(.marginalia-intrudes) {
     /* Extra separation from the body text; Reading view raises it below. */
     --marginalius-edge: 0px;
-    position: absolute !important;
-    top: 50% !important;
+    position: absolute;
+    top: 50%;
     transform: translateY(-50%);
-    float: none !important;
-    clear: none !important;
-    margin: 0 !important;
-    width: max-content !important;
-    max-width: var(--marginalius-width, 200px) !important;
-    background: transparent !important;
+    float: none;
+    clear: none;
+    margin: 0;
+    width: max-content;
+    max-width: var(--marginalius-width, 200px);
+    background: transparent;
     backdrop-filter: none;
-    box-shadow: none !important;
-    border-radius: 0 !important;
-    color: var(--text-muted, #888888) !important;
+    box-shadow: none;
+    border-radius: 0;
+    color: var(--text-muted, #888888);
 }
 
 .is-readable-line-width .marginalia:not(.marginalia-intrudes)::before {
@@ -218,27 +222,32 @@ body.theme-light {
     right: calc(
         100% + var(--marginalius-margin, 20px) + var(--marginalius-edge)
         + var(--marginalius-list-indent, 0px)
-    ) !important;
-    padding: 0 12px 0 0 !important;
-    border-right: 2px solid var(--border-color, var(--color-base-30, rgba(128, 128, 128, 0.4))) !important;
-    text-align: right !important;
+    );
+    padding: 0 12px 0 0;
+    border-right: 2px solid var(--border-color, var(--color-base-30, rgba(128, 128, 128, 0.4)));
+    text-align: right;
 }
 
 .is-readable-line-width .marginalia-right:not(.marginalia-intrudes) {
-    left: calc(100% + var(--marginalius-margin, 20px) + var(--marginalius-edge)) !important;
-    padding: 0 0 0 12px !important;
-    border-left: 2px solid var(--border-color, var(--color-base-30, rgba(128, 128, 128, 0.4))) !important;
-    text-align: left !important;
+    left: calc(100% + var(--marginalius-margin, 20px) + var(--marginalius-edge));
+    padding: 0 0 0 12px;
+    border-left: 2px solid var(--border-color, var(--color-base-30, rgba(128, 128, 128, 0.4)));
+    text-align: left;
 }
 
 /* A list item with a nested list: center on its own first line, not on the
    whole item including the nested list. */
-.is-readable-line-width li:has(> ul, > ol) > .marginalia:not(.marginalia-intrudes) {
-    top: 0.5lh !important;
+.is-readable-line-width .marginalia-on-sublist:not(.marginalia-intrudes) {
+    top: 0.5lh;
+}
+
+/* A Reading view block that held only the rest of a note crossing a blank line. */
+.markdown-preview-section > .marginalia-hidden {
+    display: none;
 }
 
 /* Editor lines and list items are already positioned; paragraphs are not. */
-.markdown-preview-section > div:has(> .marginalia) {
+.markdown-preview-section > .marginalia-anchor {
     position: relative;
 }
 
