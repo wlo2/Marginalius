@@ -1,93 +1,79 @@
-import { Plugin, MarkdownView } from "obsidian";
-import { MarginaliusSettings, DEFAULT_SETTINGS, MarginaliusSettingTab } from "./settings";
-import { registerWrapFix } from "./wrap-fix";
+import { MarkdownView, Plugin } from "obsidian";
+import { MarginaliusSettings, DEFAULT_SETTINGS, MarginaliusSettingTab, repairSettings } from "./settings";
+import { createMarginaliaLivePreview } from "./live-preview";
+import { registerReadingView } from "./reading-view";
+import { registerCommands } from "./commands";
+import { refreshPlacement, stopPlacement } from "./placement";
 
 export default class MarginaliusPlugin extends Plugin {
 	settings!: MarginaliusSettings;
-	styleEl: HTMLStyleElement | null = null;
 
 	async onload() {
 		// Load settings
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		repairSettings(this.settings);
 
 		// Add settings tab
 		this.addSettingTab(new MarginaliusSettingTab(this.app, this));
 
-		// Apply dynamic CSS variables
+		// Apply dynamic CSS variables, also to popout windows opened later
 		this.updateStyles();
+		this.registerEvent(
+			this.app.workspace.on("window-open", (_win, win) =>
+				this.applyStyles(win.document.body)
+			)
+		);
 
-		// Normalize non-breaking spaces so marginalia text wraps on word boundaries
-		registerWrapFix(this);
+		// Inline `%%> … %%` / `%%< … %%` marginalia syntax
+		this.registerEditorExtension(createMarginaliaLivePreview(this.app));
+		registerReadingView(this);
 
-		// Register click handler to open editing when clicking anywhere on the marginalia
-		this.registerDomEvent(document, "click", (evt: MouseEvent) => {
-			const target = evt.target as HTMLElement;
-			const calloutEl = target.closest('.callout[data-callout="margin"], .callout[data-callout="margin-r"]');
-			if (calloutEl) {
-				const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (activeView && activeView.getMode() === "source") {
-					// Prevent default and stop propagation so standard click is captured
-					evt.preventDefault();
-					evt.stopPropagation();
+		// Command palette: insert marginalia markers
+		registerCommands(this);
 
-					const cmView = (activeView.editor as any).cm;
-					if (cmView) {
-						try {
-							// Determine character position of the callout node in the document
-							const pos = cmView.posAtDOM(calloutEl);
-							cmView.focus();
-							cmView.dispatch({
-								selection: { anchor: pos, head: pos },
-								scrollIntoView: true
-							});
-						} catch (e) {
-							// Fallback to closest CodeMirror block widget if exact posAtDOM fails
-							const embedBlock = calloutEl.closest(".cm-embed-block, .cm-callout");
-							if (embedBlock) {
-								try {
-									const pos = cmView.posAtDOM(embedBlock);
-									cmView.focus();
-									cmView.dispatch({
-										selection: { anchor: pos, head: pos },
-										scrollIntoView: true
-									});
-								} catch (innerErr) {
-									// No-op if CodeMirror is still warming up
-								}
-							}
-						}
-					}
-				}
-			}
-		});
+		this.register(stopPlacement);
 	}
 
 	onunload() {
-		// Clean up injected styles
-		if (this.styleEl) {
-			this.styleEl.remove();
-			this.styleEl = null;
-		}
+		const cleared: Record<string, string> = {};
+		for (const name of Object.keys(this.cssVariables())) cleared[name] = "";
+		for (const body of this.windowBodies()) body.setCssProps(cleared);
+		// Notes inserted into open Reading views would stay as stray text;
+		// redraw them now that the post-processor is gone.
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			if (leaf.view instanceof MarkdownView) leaf.view.previewMode.rerender(true);
+		});
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
 		this.updateStyles();
+		refreshPlacement(this.windowBodies());
 	}
 
 	updateStyles() {
-		if (!this.styleEl) {
-			this.styleEl = document.createElement("style");
-			this.styleEl.id = "marginalius-dynamic-styles";
-			document.head.appendChild(this.styleEl);
-		}
+		for (const body of this.windowBodies()) this.applyStyles(body);
+	}
 
-		this.styleEl.textContent = `
-			:root {
-				--marginalius-width: ${this.settings.sidenoteWidth};
-				--marginalius-margin: ${this.settings.sidenoteMargin};
-				--marginalius-intrusive-width: ${this.settings.intrusiveWidth};
-			}
-		`;
+	private applyStyles(body: HTMLElement) {
+		body.setCssProps(this.cssVariables());
+	}
+
+	/** The main window's body plus the body of every open popout window. */
+	private windowBodies(): Set<HTMLElement> {
+		const bodies = new Set([document.body]);
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			bodies.add(leaf.view.containerEl.ownerDocument.body);
+		});
+		return bodies;
+	}
+
+	private cssVariables(): Record<string, string> {
+		return {
+			"--marginalius-width": this.settings.sidenoteWidth,
+			"--marginalius-margin": this.settings.sidenoteMargin,
+			"--marginalius-intrusive-width": this.settings.intrusiveWidth,
+			"--marginalius-pane-gap": this.settings.paneGap,
+		};
 	}
 }

@@ -1,17 +1,36 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, PluginSettingTab, SettingDefinitionItem } from "obsidian";
 import type MarginaliusPlugin from "./main";
 
 export interface MarginaliusSettings {
 	sidenoteWidth: string;
 	sidenoteMargin: string;
 	intrusiveWidth: string;
+	paneGap: string;
 }
 
 export const DEFAULT_SETTINGS: MarginaliusSettings = {
 	sidenoteWidth: "200px",
 	sidenoteMargin: "20px",
 	intrusiveWidth: "200px",
+	paneGap: "30px",
 };
+
+type SettingKey = keyof MarginaliusSettings;
+
+/** Every setting is a CSS length; a number without a unit ("200") is not. Empty means the default. */
+function isLength(value: string): boolean {
+	return value.trim() === "" || CSS.supports("width", value);
+}
+
+/** Values saved by an older version are not validated by the tab; reset invalid ones to the default. */
+export function repairSettings(settings: MarginaliusSettings): void {
+	for (const key of Object.keys(DEFAULT_SETTINGS) as SettingKey[]) {
+		const value = settings[key];
+		if (typeof value !== "string" || !value.trim() || !isLength(value)) {
+			settings[key] = DEFAULT_SETTINGS[key];
+		}
+	}
+}
 
 export class MarginaliusSettingTab extends PluginSettingTab {
 	plugin: MarginaliusPlugin;
@@ -21,49 +40,32 @@ export class MarginaliusSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
-	display(): void {
-		const { containerEl } = this;
-		containerEl.empty();
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		const fields: [SettingKey, string, string][] = [
+			["sidenoteWidth", "Margin note width", "The maximum width of a note in the margin. Short notes take less."],
+			["sidenoteMargin", "Gap to text", "The gap between a margin note and the text."],
+			["paneGap", "Pane edge gap", "The space kept between a note and the edge of the pane, such as a sidebar. A note that would come closer becomes a box in the text."],
+			["intrusiveWidth", "Box width", "The maximum width of a note shown as a box in the text, when it does not fit in the margin. Short notes take less."],
+		];
 
-		containerEl.createEl("h2", { text: "Marginalius settings" });
+		return fields.map(([key, name, desc]) => ({
+			name,
+			desc: `${desc} Any CSS length, such as ${DEFAULT_SETTINGS[key]}.`,
+			control: {
+				type: "text",
+				key,
+				defaultValue: DEFAULT_SETTINGS[key],
+				placeholder: DEFAULT_SETTINGS[key],
+				validate: (value: string) =>
+					isLength(value) ? undefined : `Use a CSS length, such as ${DEFAULT_SETTINGS[key]}.`,
+			},
+		}));
+	}
 
-		new Setting(containerEl)
-			.setName("Sidenote width")
-			.setDesc("The width of the marginalia blocks when there is enough space in the margins.")
-			.addText((text) =>
-				text
-					.setPlaceholder("220px")
-					.setValue(this.plugin.settings.sidenoteWidth)
-					.onChange(async (value) => {
-						this.plugin.settings.sidenoteWidth = value || "220px";
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName("Sidenote margin")
-			.setDesc("The spacing between the marginalia and the main document text.")
-			.addText((text) =>
-				text
-					.setPlaceholder("20px")
-					.setValue(this.plugin.settings.sidenoteMargin)
-					.onChange(async (value) => {
-						this.plugin.settings.sidenoteMargin = value || "20px";
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName("Intrusive width")
-			.setDesc("The width of the marginalia blocks when they are half-embedded (intrusive) in the text.")
-			.addText((text) =>
-				text
-					.setPlaceholder("200px")
-					.setValue(this.plugin.settings.intrusiveWidth)
-					.onChange(async (value) => {
-						this.plugin.settings.intrusiveWidth = value || "200px";
-						await this.plugin.saveSettings();
-					})
-			);
+	/** Save through the plugin, so the CSS variables and note placement update too. */
+	async setControlValue(key: string, value: unknown): Promise<void> {
+		const settingKey = key as SettingKey;
+		this.plugin.settings[settingKey] = String(value).trim() || DEFAULT_SETTINGS[settingKey];
+		await this.plugin.saveSettings();
 	}
 }
