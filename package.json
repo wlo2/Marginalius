@@ -1,13 +1,14 @@
 {
 	"name": "marginalius",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"description": "Show adaptive marginalia.",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {
 		"dev": "env -u npm_config_devdir node esbuild.config.mjs",
 		"build": "env -u npm_config_devdir tsc -noEmit -skipLibCheck && env -u npm_config_devdir node esbuild.config.mjs production",
-		"test": "esbuild test/*.test.ts --bundle --platform=node --format=esm --alias:obsidian=./test/obsidian-stub.ts --outdir=.test-build --log-level=warning && node --test .test-build/"
+		"test": "esbuild test/*.test.ts --bundle --platform=node --format=esm --alias:obsidian=./test/obsidian-stub.ts --outdir=.test-build --log-level=warning && node --test .test-build/",
+		"lint": "eslint ."
 	},
 	"keywords": [
 		"obsidian",
@@ -18,7 +19,11 @@
 	],
 	"license": "GPL-3.0-only",
 	"devDependencies": {
+		"@codemirror/state": "6.5.0",
+		"@codemirror/view": "6.38.6",
 		"esbuild": "0.25.5",
+		"eslint": "^9.39.5",
+		"eslint-plugin-obsidianmd": "^0.4.2",
 		"obsidian": "1.13.0",
 		"typescript": "^5.8.3"
 	}

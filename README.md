@@ -107,6 +107,9 @@ npm run build
 
 # tests (parser, Live Preview decorations, Reading view placement, insert command, margin/box placement)
 npm test
+
+# lint with Obsidian's plugin rules (eslint-plugin-obsidianmd)
+npm run lint
 ```
 
 `npm run build` type-checks with `tsc` and bundles `src/main.ts` into `main.js` with esbuild (see `esbuild.config.mjs`). Tests use Node's built-in test runner with a small stub of the `obsidian` API (`test/obsidian-stub.ts`), because the real API only exists inside the app.

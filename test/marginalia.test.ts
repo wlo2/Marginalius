@@ -125,7 +125,7 @@ test("live preview: note drawn at its line start, marker hidden, cursor reveal, 
 });
 
 /** Stand-ins for the browser layout APIs placement.ts reads. */
-function fakeBox(left: number, right: number, extra: Record<string, unknown> = {}) {
+function fakeBox<T extends object>(left: number, right: number, extra = {} as T) {
 	const props = new Map<string, string>();
 	let rect = { left, right };
 	return {

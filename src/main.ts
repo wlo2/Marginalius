@@ -10,7 +10,8 @@ export default class MarginaliusPlugin extends Plugin {
 
 	async onload() {
 		// Load settings
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const saved = (await this.loadData()) as Partial<MarginaliusSettings> | null;
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
 		repairSettings(this.settings);
 
 		// Add settings tab

@@ -13,12 +13,8 @@ export function renderNote(
 	sourcePath: string,
 	component: Component
 ): HTMLElement {
-	const note = document.createElement("span");
-	note.className = `marginalia marginalia-${side}`;
-
-	const inner = document.createElement("div");
-	inner.className = "marginalia-content";
-	note.appendChild(inner);
+	const note = createSpan({ cls: `marginalia marginalia-${side}` });
+	const inner = note.createDiv({ cls: "marginalia-content" });
 
 	// Not awaited: the note appears at once and fills in when rendering finishes.
 	void (async () => {

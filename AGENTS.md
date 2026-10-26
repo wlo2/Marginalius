@@ -16,9 +16,10 @@ When a rule here and the official docs disagree, the docs win. Update this file.
   - `npm run dev`: build and watch.
   - `npm run build`: type check with `tsc`, then a minified production build.
   - `npm test`: Node's test runner against a small stub of the `obsidian` API (`test/obsidian-stub.ts`).
+  - `npm run lint`: ESLint with `eslint-plugin-obsidianmd`'s recommended rules, the same guidelines Obsidian's automated review checks. Test and build files run in Node, so `eslint.config.mjs` turns off the Node-module and `globalThis` rules for them.
 - Release files: `main.js`, `manifest.json` and `styles.css`. To test by hand, copy them to `<Vault>/.obsidian/plugins/<plugin-id>/`, reload Obsidian and enable the plugin in **Settings → Community plugins**.
 - Keep `main.ts` to the plugin lifecycle (load, unload, registering things). Give every other file one job, and split a file that grows past roughly 200–300 lines by job.
-- Next release: `0.2.0`. The manifest already says `0.2.0`; tag the release exactly `0.2.0`, with no `v` (the earlier `v0.1` tag broke that rule).
+- Releases: tag each one exactly as the manifest `version` (latest `0.2.1`), with no `v` (the earlier `v0.1` tag broke that rule).
 - Decision: `onload()` sets the CSS variables and registers the editor extension and Reading view processor directly, not in `onLayoutReady()`. It's cheap, and waiting would draw notes with default sizes first and then make them jump (see section 9).
 
 ## 1. Manifest, versions and releases
@@ -211,7 +212,7 @@ getSettingDefinitions(): SettingDefinitionItem[] {
 
 ## 11. Before every release
 
-- [ ] Type check, tests and production build pass. `main.js` is minified.
+- [ ] Type check, tests, lint and production build pass. `main.js` is minified.
 - [ ] `manifest.json` `version` is bumped, `versions.json` has the new entry, and the Git tag equals the version.
 - [ ] The release has `main.js` and `manifest.json` attached, plus `styles.css` if it exists.
 - [ ] `LICENSE` exists. The README states the license, credits bundled code, and covers every disclosure from section 6.
