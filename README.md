@@ -50,6 +50,24 @@ Select a rendered note in the editor (Live Preview or Source mode) to edit it. I
 
 Move the cursor out of the note and it renders again.
 
+## Install
+
+Marginalius is in Obsidian's [community plugin directory](https://community.obsidian.md/plugins/marginalius). It needs Obsidian 1.13 or later.
+
+1. Open **Settings → Community plugins**. If community plugins are off, select **Turn on community plugins**.
+2. Select **Browse** and search for **Marginalius**.
+3. Select **Install**, then **Enable**.
+
+### Install manually
+
+Download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/wlo2/Marginalius/releases/latest) and copy them into your vault's plugin folder:
+
+```bash
+cp main.js manifest.json styles.css "<Vault>/.obsidian/plugins/marginalius/"
+```
+
+Then reload Obsidian and enable the plugin in **Settings → Community plugins**.
+
 ## Settings
 
 **Settings → Community plugins → Marginalius**
@@ -112,17 +130,9 @@ npm test
 npm run lint
 ```
 
-`npm run build` type-checks with `tsc` and bundles `src/main.ts` into `main.js` with esbuild (see `esbuild.config.mjs`). Tests use Node's built-in test runner with a small stub of the `obsidian` API (`test/obsidian-stub.ts`), because the real API only exists inside the app.
+`npm run build` type-checks with `tsc` and bundles `src/main.ts` into `main.js` with esbuild (see `esbuild.config.mjs`). Tests use Node's built-in test runner with a small stub of the `obsidian` API (`test/obsidian-stub.ts`), because the real API only exists inside the app. To try a local build, copy it into a vault as in [Install manually](#install-manually).
 
-### Install manually
-
-Copy the release files into your vault's plugin folder, reload Obsidian, and enable the plugin in **Settings → Community plugins**:
-
-```bash
-cp main.js manifest.json styles.css "<Vault>/.obsidian/plugins/marginalius/"
-```
-
-A release needs `main.js`, `manifest.json` and `styles.css`. Marginalius needs Obsidian 1.13 or later.
+Releases are built by `.github/workflows/release.yml`: push a tag equal to the manifest `version`, and Obsidian's `obsidian-workflows` action builds `main.js`, attests it and `styles.css`, and creates a draft release to publish.
 
 ## Privacy
 
