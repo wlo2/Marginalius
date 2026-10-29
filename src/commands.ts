@@ -1,5 +1,6 @@
 import { Editor, Notice } from "obsidian";
 import type MarginaliusPlugin from "./main";
+import { findMarginalia } from "./parser";
 
 /**
  * Turn each selection into a marginalia note, or insert an empty one at each
@@ -21,9 +22,14 @@ export function insertMarginalia(editor: Editor, side: "left" | "right"): void {
 		})
 		.sort((x, y) => x.from - y.from);
 
-	// Wrapping an existing note would nest the markers and break both.
-	if (edits.some((edit) => edit.text.includes("%%"))) {
-		new Notice("Selection already contains a marginalia note");
+	// Wrapping an existing note or comment, or inserting inside one, would
+	// nest the markers and break both.
+	const notes = findMarginalia(doc);
+	const nested = edits.some(
+		(edit) => edit.text.includes("%%") || notes.some((note) => note.from < edit.to && edit.from < note.to)
+	);
+	if (nested) {
+		new Notice("A marginalia note can't go inside another note or comment");
 		return;
 	}
 

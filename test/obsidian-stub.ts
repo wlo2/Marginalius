@@ -12,8 +12,6 @@ export class MarkdownRenderChild extends Component {
 	}
 }
 
-export class TFile {}
-
 export const notices: string[] = [];
 export class Notice {
 	constructor(message: string) {

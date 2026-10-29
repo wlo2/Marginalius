@@ -40,7 +40,9 @@ in the left margin next to this paragraph.
 - The character right after the opening `%%` (`>` or `<`) sets the side.
 - Everything between the markers is rendered as Markdown, so bold, italic and links work.
 - Markers inside inline code or fenced code blocks are ignored, so you can write about the syntax without triggering it.
-- To insert a marker, run **Insert left marginalia** or **Insert right marginalia** from the command palette. Selected text becomes the note, and with several selections each one becomes its own note. With nothing selected, you get an empty note with the cursor inside. A selection that already contains a note is left alone.
+- A note can span several paragraphs, or sit in a list item or callout.
+- In Live Preview, a note inside a callout is always a box beside the callout: Obsidian draws a callout as one block and shows nothing outside it. In Reading view, and while you edit the callout, the note can sit in the margin like any other.
+- To insert a marker, run **Insert left marginalia** or **Insert right marginalia** from the command palette. Selected text becomes the note, and with several selections each one becomes its own note. With nothing selected, you get an empty note with the cursor inside. The command does nothing when a selection contains a note or comment, or when the cursor is inside one.
 
 ### Edit a note
 
@@ -79,7 +81,7 @@ Then reload Obsidian and enable the plugin in **Settings → Community plugins**
 | **Pane edge gap** | Space kept between a note and the edge of the pane, such as a sidebar, on both sides. A note that would come closer becomes a box in the text. | `30px` |
 | **Box width** | Maximum width of a note shown as a box in the text. A short note gets a box that fits its text. | `200px` |
 
-Each value is a CSS length, such as `200px` or `12em`. A number without a unit (`200`) isn't valid CSS: the field shows an error and the value isn't saved. An empty field means the default. The settings use Obsidian's declarative settings, so they also show up in the settings search.
+Each value is a CSS length, such as `200px` or `12em`. A number without a unit (`200`), a percentage or a keyword such as `auto` isn't accepted: the field shows an error and the value isn't saved. An empty field means the default. The settings use Obsidian's declarative settings, so they also show up in the settings search.
 
 The values go into the CSS custom properties `--marginalius-width`, `--marginalius-margin`, `--marginalius-pane-gap` and `--marginalius-intrusive-width`, on the main window and on any popout windows.
 
@@ -93,7 +95,7 @@ The code is split into small modules under `src/`:
 - `note.ts`: builds the note element and renders its Markdown with Obsidian's `MarkdownRenderer`. Both views use it.
 - `placement.ts`: decides for each note whether it fits in the margin. A `ResizeObserver` measures each note in the margin layout (how far its outer edge reaches from the column), again whenever a setting changes, and watches the pane. When the free space beside the column gets smaller than that, the note gets the `marginalia-intrudes` class and becomes a box. It also records the free space as `--marginalius-room-left` and `--marginalius-room-right`, and measures list indents so left notes line up with the column edge.
 - `live-preview.ts`: a CodeMirror `StateField` that decorates the editor. It is a state field because notes can span several lines. Each marker is hidden where it is, and the note is drawn as a `MarginaliaWidget` at the start of the marker's line, so a box floats from the top of its paragraph rather than from wherever the marker sits. When the cursor or selection touches a marker, the raw source shows so you can edit it, and selecting a widget puts the cursor at the start of the note's text.
-- `reading-view.ts`: a `MarkdownPostProcessor` for Reading view. Obsidian strips `%% … %%` comments before rendering, so the processor gets the raw Markdown from `getSectionInfo()` and finds the notes with the shared parser. Each note goes into the list item it belongs to (Obsidian renders a whole list as one block), or else into its paragraph. If a full re-render passes no source text, the processor reads the file instead. Obsidian only hides a comment inside one paragraph, so a note that crosses a blank line would show as plain text; the processor renders those blocks again without the note.
+- `reading-view.ts`: a `MarkdownPostProcessor` for Reading view. Obsidian strips `%% … %%` comments before rendering, so the processor gets the raw Markdown from `getSectionInfo()` and finds the notes with the shared parser. Each note goes into the list item it belongs to (Obsidian renders a whole list as one block), or else into its paragraph. If a full re-render passes no source text, the processor reads the file instead. Obsidian only hides a comment inside one paragraph, so a note that crosses a paragraph break (a blank line, a callout's `>` line, a nested list) would also show as plain text; the processor cuts that text out of Obsidian's own rendering, so list items and task checkboxes keep working. Live Preview draws a callout as one block over the editor lines, so the processor also adds the notes of a callout to that block, as boxes, because Obsidian clips that block to its own area (`contain: paint`).
 - `commands.ts`: the **Insert left marginalia** and **Insert right marginalia** commands.
 - `styles.css`: all the presentation. The box in the text (floated, rounded, liquid glass) is the default. Its rim is a 1px gradient ring on `::before`, cut out with a mask. While a note fits in the margin, it is positioned absolutely beside the column and centered on its block: the editor line, list item or paragraph.
 
@@ -111,7 +113,7 @@ The free space already leaves out the **Pane edge gap**, so a box that has just 
 
 ## Development
 
-Requirements: Node.js 18+ and npm.
+Requirements: Node.js 22+ and npm.
 
 ```bash
 # install dependencies

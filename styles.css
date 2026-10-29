@@ -41,7 +41,6 @@
 .marginalia * {
     word-break: normal;
     overflow-wrap: break-word;
-    word-wrap: break-word;
     white-space: normal;
     line-break: auto;
     hyphens: none;
@@ -60,13 +59,17 @@
     max-width: 100%;
     box-sizing: border-box;
     min-width: 0;
+    /* 13px at the default 16px text size, following the Font size setting.
+       From --font-text-size, not em, so a note on a heading stays small. Set
+       here, not on .marginalia, whose `lh` must stay its block's line. */
+    font-size: calc(var(--font-text-size, 16px) * 0.8125);
+    line-height: 1.4;
 }
 
 .marginalia .marginalia-content p {
     margin: 0 0 6px 0;
     padding: 0;
-    line-height: 1.4;
-    font-size: 13px;
+    line-height: inherit;
     color: inherit;
 }
 
@@ -90,22 +93,15 @@
 .marginalia.marginalia-left {
     float: left;
     clear: left;
-    /* Shrinks to fit short notes; long ones wrap at the configured width. */
-    width: auto;
-    max-width: min(var(--marginalius-intrusive-width, 200px), 45%);
     /* Reach back over any indent of the note's block too (list items). */
     margin: 0 var(--marginalius-margin, 20px) 8px
         calc(-1 * (var(--marginalius-room-left, 0px) + var(--marginalius-box-indent, 0px)));
-    text-align: left;
 }
 
 .marginalia.marginalia-right {
     float: right;
     clear: right;
-    width: auto;
-    max-width: min(var(--marginalius-intrusive-width, 200px), 45%);
     margin: 0 calc(-1 * var(--marginalius-room-right, 0px)) 8px var(--marginalius-margin, 20px);
-    text-align: left;
 }
 
 /* Liquid glass box: an even translucent tint with backdrop blur, a bright rim
@@ -130,6 +126,10 @@ body.theme-light {
 
 .marginalia.marginalia-left,
 .marginalia.marginalia-right {
+    /* Shrinks to fit short notes; long ones wrap at the configured width. */
+    width: auto;
+    max-width: min(var(--marginalius-intrusive-width, 200px), 45%);
+    text-align: left;
     padding: 10px 14px;
     border: none;
     border-radius: 16px;

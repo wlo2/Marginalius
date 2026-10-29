@@ -38,7 +38,11 @@ export default class MarginaliusPlugin extends Plugin {
 	onunload() {
 		const cleared: Record<string, string> = {};
 		for (const name of Object.keys(this.cssVariables())) cleared[name] = "";
-		for (const body of this.windowBodies()) body.setCssProps(cleared);
+		for (const body of this.windowBodies()) {
+			body.setCssProps(cleared);
+			// Notes added to Live Preview callouts belong to Obsidian's drawing of them.
+			body.querySelectorAll(".cm-embed-block .marginalia").forEach((note) => note.remove());
+		}
 		// Notes inserted into open Reading views would stay as stray text;
 		// redraw them now that the post-processor is gone.
 		this.app.workspace.iterateAllLeaves((leaf) => {

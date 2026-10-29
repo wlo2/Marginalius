@@ -5,7 +5,7 @@ import { EditorView } from "@codemirror/view";
 import { editorInfoField, notices } from "obsidian";
 import { findMarginalia, markerLength } from "../src/parser";
 import { createMarginaliaLivePreview } from "../src/live-preview";
-import { anchorFor, itemAt, textOutsideNotes } from "../src/reading-view";
+import { anchorFor, leftovers, planSection } from "../src/reading-view";
 import { insertMarginalia } from "../src/commands";
 import { measure, place, refreshPlacement } from "../src/placement";
 
@@ -79,23 +79,34 @@ test("reading view: a note goes on the list item holding its line", () => {
 	assert.equal(anchorFor(paragraph, 1), paragraph);
 });
 
-test("reading view: a note crossing a blank line is cut from each section it spans", () => {
-	const text = "Second para. %%< right note\n\nwith two paragraphs %% after\n\nThird %%> x %% end";
-	const notes = findMarginalia(text);
-	const firstEnd = text.indexOf("\n");
-	const second = firstEnd + 2;
-	const secondEnd = text.indexOf("\n", second);
-	assert.equal(textOutsideNotes(text, notes, 0, firstEnd), "Second para. ");
-	assert.equal(textOutsideNotes(text, notes, second, secondEnd), " after");
-	// A section the note does not touch keeps everything but its own notes.
-	assert.equal(textOutsideNotes(text, notes, secondEnd + 2, text.length), "Third  end");
+test("reading view: which notes each section holds", () => {
+	// Lines: 0 start of a note, 2 inside it, 4 its end, 6 a note of its own.
+	const text = "Second para. %%< right note\n\nmiddle\n\nwith two paragraphs %% after\n\nThird %%> x %% end";
+	const lineStarts = [0];
+	for (let i = text.indexOf("\n"); i !== -1; i = text.indexOf("\n", i + 1)) lineStarts.push(i + 1);
+	const plan = (line: number) => {
+		const { starting, continued, covered } = planSection(findMarginalia(text), lineStarts, line, line, text.length);
+		return { starting: starting.map((m) => m.content), continued, covered };
+	};
+	assert.deepEqual(plan(0), { starting: ["right note\n\nmiddle\n\nwith two paragraphs"], continued: false, covered: false });
+	assert.deepEqual(plan(2), { starting: [], continued: false, covered: true });
+	assert.deepEqual(plan(4), { starting: [], continued: true, covered: false });
+	assert.deepEqual(plan(6), { starting: ["x"], continued: false, covered: false });
+});
 
-	// A re-rendered list has no data-line: the note goes on the item started last before it.
-	const items = ["a", "b", "c"];
-	const list = { querySelectorAll: () => items } as unknown as HTMLElement;
-	assert.equal(itemAt(list, "- item "), "a");
-	assert.equal(itemAt(list, "- item \n  - nested\n- next "), "c");
-	assert.equal(itemAt(list, "Para "), list);
+test("reading view: the note text Obsidian left in a section is found for cutting", () => {
+	// Obsidian hid a note within one paragraph: nothing to cut.
+	assert.deepEqual(leftovers("Third  end", false, 1), []);
+	// A note crossing a blank line: its start goes to the end of the section...
+	assert.deepEqual(leftovers("Second para. %%< right note", false, 1), [[13, 27]]);
+	// ...and its end, in a later section, up to the closing %%.
+	assert.deepEqual(leftovers("with two paragraphs %% after", true, 0), [[0, 22]]);
+	// A callout paragraph break (`>` line) or a nested list: marker to closing %%.
+	const callout = "NoteCallout para %%> callout notestill callout note %%";
+	assert.deepEqual(leftovers(callout, false, 1), [[17, callout.length]]);
+	// Only as many raw markers as there are notes; code is not part of the text.
+	assert.deepEqual(leftovers("a %%> b %% c %%> d", false, 1), [[2, 10]]);
+	assert.deepEqual(leftovers("no markers", false, 2), []);
 });
 
 test("insert command: each selection keeps its own text", () => {
@@ -110,10 +121,18 @@ test("insert command: each selection keeps its own text", () => {
 	assert.equal(empty.doc(), "a%%<  %%b");
 	assert.deepEqual(empty.cursors(), [5]);
 
-	const nested = fakeEditor("a %%> b %% c", [[0, 12]]);
-	insertMarginalia(nested.editor, "left");
-	assert.equal(nested.doc(), "a %%> b %% c");
-	assert.deepEqual(notices, ["Selection already contains a marginalia note"]);
+	// Wrapping a note, or inserting with the cursor or a selection inside one, is refused.
+	for (const selection of [[0, 12], [7, 7], [6, 7]] as [number, number][]) {
+		const nested = fakeEditor("a %%> b %% c", [selection]);
+		insertMarginalia(nested.editor, "left");
+		assert.equal(nested.doc(), "a %%> b %% c");
+	}
+	assert.deepEqual(notices, Array(3).fill("A marginalia note can't go inside another note or comment"));
+
+	// Right before or after a note is fine.
+	const beside = fakeEditor("a %%> b %% c", [[2, 2], [10, 10]]);
+	insertMarginalia(beside.editor, "right");
+	assert.equal(beside.doc(), "a %%<  %%%%> b %%%%<  %% c");
 });
 
 test("live preview: note drawn at its line start, marker hidden, cursor reveal, rebuild on edit", () => {
@@ -176,7 +195,18 @@ function fakeNote(side: "left" | "right", left: number, right: number) {
 
 test("placement: free space leaves the pane edge gap; a note that no longer fits becomes a box", () => {
 	const g = globalThis as Record<string, unknown>;
-	g.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+	const observed = new Set<unknown>();
+	let resized: (entries: { target: unknown }[]) => void = () => {};
+	g.ResizeObserver = class {
+		constructor(callback: typeof resized) {
+			resized = callback;
+		}
+		observe(target: unknown) {
+			observed.add(target);
+		}
+		unobserve() {}
+		disconnect() {}
+	};
 	g.getComputedStyle = (el: { padding: string }) => ({
 		paddingLeft: el.padding,
 		getPropertyValue: (name: string) => (name === "--marginalius-pane-gap" ? "30px" : ""),
@@ -212,4 +242,21 @@ test("placement: free space leaves the pane edge gap; a note that no longer fits
 	right.move(970, 1100);
 	refreshPlacement([{ querySelectorAll: () => [view] } as never]);
 	assert.equal(isBox(right), false);
+
+	// "Readable line length" off and on resizes only the column, which is watched too.
+	assert.ok(observed.has(column));
+	let readable = false;
+	Object.assign(column, {
+		classList: { contains: () => false },
+		closest: (s: string) => (s.includes("markdown-source-view") ? view : readable ? {} : null),
+	});
+	column.move(0, 1150);
+	resized([{ target: column }]);
+	assert.equal(isBox(right), true);
+	assert.equal(isBox(left), true);
+	readable = true;
+	column.move(250, 950);
+	resized([{ target: column }]);
+	assert.equal(isBox(right), false);
+	assert.equal(isBox(left), false);
 });

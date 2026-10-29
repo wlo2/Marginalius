@@ -17,15 +17,27 @@ const outerEdges = new WeakMap<HTMLElement, number>();
 /** Notes whose block indent has been measured (once per note). */
 const indented = new WeakSet<HTMLElement>();
 
-/** Watches notes (first layout, size changes) and the panes they sit in. Created on first use. */
+/** Notes that always stay boxes inside their block (see pinAsBox). */
+const pinned = new WeakSet<HTMLElement>();
+
+/**
+ * Watches notes (first layout, size changes), the panes they sit in and the
+ * text column, whose width changes without the pane's when "Readable line
+ * length" is turned on or off. Created on first use.
+ */
 let observer: ResizeObserver | null = null;
 
 function watcher(): ResizeObserver {
 	observer ??= new ResizeObserver((entries) => {
 		for (const { target } of entries) {
 			const el = target as HTMLElement;
-			if (el.classList.contains("marginalia")) measure(el);
-			else place(el);
+			if (el.classList.contains("marginalia")) {
+				measure(el);
+				continue;
+			}
+			const view = viewOf(el);
+			if (view) place(view);
+			else observer?.unobserve(el); // a column no longer in its view
 		}
 	});
 	return observer;
@@ -40,6 +52,18 @@ export function untrackNote(note: HTMLElement): void {
 }
 
 /**
+ * Keep a note a box inside its block, never in the margin. For a block that
+ * Obsidian clips to its own area: Live Preview callouts get
+ * `contain: paint !important`, so a note outside one would not be drawn.
+ */
+export function pinAsBox(note: HTMLElement): void {
+	pinned.add(note);
+	note.classList.add(INTRUDES);
+	// No free space to reach into, so the box does not stick out either.
+	note.setCssProps({ "--marginalius-room-left": "0px", "--marginalius-room-right": "0px" });
+}
+
+/**
  * Settings changed (a width, the margin or the pane edge gap): measure every
  * note in these windows again in the margin layout, then place it. Done in
  * one go, before the next paint, so nothing flickers.
@@ -49,6 +73,7 @@ export function refreshPlacement(bodies: Iterable<HTMLElement>): void {
 		body.querySelectorAll<HTMLElement>(".markdown-source-view, .markdown-reading-view").forEach((view) => {
 			place(view); // pane room, even if the view has no notes
 			view.querySelectorAll<HTMLElement>(".marginalia").forEach((note) => {
+				if (pinned.has(note)) return;
 				note.classList.remove(INTRUDES);
 				outerEdges.delete(note);
 				measure(note);
@@ -102,6 +127,7 @@ export function measure(note: HTMLElement): void {
 	}
 
 	watcher().observe(view); // no-op if already observed
+	watcher().observe(column);
 	place(view, [note]);
 }
 
@@ -110,6 +136,7 @@ export function place(view: HTMLElement, notes?: HTMLElement[]): void {
 	const column = columnOf(view);
 	if (!view.isConnected || !column) {
 		observer?.unobserve(view);
+		if (column) observer?.unobserve(column);
 		return;
 	}
 	const v = view.getBoundingClientRect();

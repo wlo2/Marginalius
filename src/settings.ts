@@ -17,9 +17,14 @@ export const DEFAULT_SETTINGS: MarginaliusSettings = {
 
 type SettingKey = keyof MarginaliusSettings;
 
-/** Every setting is a CSS length; a number without a unit ("200") is not. Empty means the default. */
+/**
+ * Every setting is a CSS length; a number without a unit ("200") is not, and
+ * neither is a percentage or a keyword like `auto` (the pane edge gap is
+ * registered as a length, and keywords break the width math). Empty means
+ * the default. `border-width` takes only lengths, also inside `calc()`.
+ */
 function isLength(value: string): boolean {
-	return value.trim() === "" || CSS.supports("width", value);
+	return value.trim() === "" || CSS.supports("border-top-width", `calc(${value} + 0px)`);
 }
 
 /** Values saved by an older version are not validated by the tab; reset invalid ones to the default. */
