@@ -6,6 +6,8 @@ Marginalius is an Obsidian plugin for Tufte/Cornell-style side notes. On a wide 
 
 You write a note once with an inline marker, and the plugin picks the layout from the width of the editor pane.
 
+Part of the [Noetic Suite](docs/Noetic%20Suite.md).
+
 ## Features
 
 - One syntax gives two layouts. When there is room, the note sits in the side gutter beside the text column, borderless and in muted text, like a printed margin note. When there isn't, it becomes a small rounded box floated into the text, styled as liquid glass: an even translucent tint with blur, a bright rim fading from the upper-left and a lifted shadow. With **Reduce transparency** or **Increase contrast** turned on in your system settings, the box is solid instead.
@@ -42,6 +44,10 @@ in the left margin next to this paragraph.
 - Markers inside inline code or fenced code blocks are ignored, so you can write about the syntax without triggering it.
 - A note can span several paragraphs, or sit in a list item or callout.
 - In Live Preview, a note inside a callout is always a box beside the callout: Obsidian draws a callout as one block and shows nothing outside it. In Reading view, and while you edit the callout, the note can sit in the margin like any other.
+- A note inside an embedded note (`![[other note]]`) is always a box: Obsidian clips an embed to its own area.
+- In Live Preview, a note inside a table isn't shown, because Obsidian draws a table as one block. Reading view shows it.
+- The first `%%` after the marker ends a note, even inside inline code, because that's where Obsidian ends a comment in Reading view.
+- If a note that started in an earlier paragraph ends in the same paragraph where another note starts, Reading view doesn't show the text between them. Obsidian reads the two `%%` around that text as a comment.
 - To insert a marker, run **Insert left marginalia** or **Insert right marginalia** from the command palette. Selected text becomes the note, and with several selections each one becomes its own note. With nothing selected, you get an empty note with the cursor inside. The command does nothing when a selection contains a note or comment, or when the cursor is inside one.
 
 ### Edit a note
@@ -135,6 +141,10 @@ npm run lint
 `npm run build` type-checks with `tsc` and bundles `src/main.ts` into `main.js` with esbuild (see `esbuild.config.mjs`). Tests use Node's built-in test runner with a small stub of the `obsidian` API (`test/obsidian-stub.ts`), because the real API only exists inside the app. To try a local build, copy it into a vault as in [Install manually](#install-manually).
 
 Releases are built by `.github/workflows/release.yml`: push a tag equal to the manifest `version`, and Obsidian's `obsidian-workflows` action builds `main.js`, attests it and `styles.css`, and creates a draft release to publish.
+
+## Use from another plugin
+
+While Marginalius is enabled, `app.plugins.getPlugin("marginalius")?.api.findMarginalia(text)` returns every note in `text`, skipping code. Each note has `from` and `to` (offsets into `text`), `side` and `content`. It's how [Outlineus](https://github.com/wlo2/Outlineus) knows which headings have notes.
 
 ## Privacy
 

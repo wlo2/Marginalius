@@ -3,9 +3,11 @@
 # a draft release with the three files. Publish the draft on the Releases page.
 # Actions are pinned to commit SHAs: a moved tag can't change what builds and signs a
 # release. Dependabot (.github/dependabot.yml) proposes updates.
+# Pushes to main run only the tests, so a failure shows up before a tag is pushed.
 name: Release
 on:
   push:
+    branches: [main]
     tags: ['*']
 
 jobs:
@@ -22,6 +24,7 @@ jobs:
           node-version: 24
       - run: npm ci && npm test
       - uses: obsidianmd/obsidian-workflows@8167caed39664214d82c86fdfa32e06d8d55f61d # v1.2.3
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           mode: release
         env:

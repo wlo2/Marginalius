@@ -24,9 +24,10 @@ export function insertMarginalia(editor: Editor, side: "left" | "right"): void {
 
 	// Wrapping an existing note or comment, or inserting inside one, would
 	// nest the markers and break both.
-	const notes = findMarginalia(doc);
+	const comments = [...doc.matchAll(/%%[\s\S]*?%%/g)].map((m) => ({ from: m.index, to: m.index + m[0].length }));
+	const taken = [...findMarginalia(doc), ...comments];
 	const nested = edits.some(
-		(edit) => edit.text.includes("%%") || notes.some((note) => note.from < edit.to && edit.from < note.to)
+		(edit) => edit.text.includes("%%") || taken.some((span) => span.from < edit.to && edit.from < span.to)
 	);
 	if (nested) {
 		new Notice("A marginalia note can't go inside another note or comment");

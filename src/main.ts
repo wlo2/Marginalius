@@ -4,9 +4,12 @@ import { createMarginaliaLivePreview } from "./live-preview";
 import { registerReadingView } from "./reading-view";
 import { registerCommands } from "./commands";
 import { refreshPlacement, stopPlacement } from "./placement";
+import { findMarginalia } from "./parser";
 
 export default class MarginaliusPlugin extends Plugin {
 	settings!: MarginaliusSettings;
+	/** For other plugins, through `app.plugins.getPlugin("marginalius")`. */
+	api = { findMarginalia };
 
 	async onload() {
 		// Load settings

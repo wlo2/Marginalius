@@ -21,19 +21,23 @@ type SettingKey = keyof MarginaliusSettings;
  * Every setting is a CSS length; a number without a unit ("200") is not, and
  * neither is a percentage or a keyword like `auto` (the pane edge gap is
  * registered as a length, and keywords break the width math). Empty means
- * the default. `border-width` takes only lengths, also inside `calc()`.
+ * the default. `outline-offset` takes only lengths.
  */
 function isLength(value: string): boolean {
-	return value.trim() === "" || CSS.supports("border-top-width", `calc(${value} + 0px)`);
+	return value.trim() === "" || CSS.supports("outline-offset", value);
+}
+
+/** A bare `0` is a length, but not inside the `calc()` math these variables go through. */
+function withUnit(value: string): string {
+	return CSS.supports("outline-offset", `calc(${value} + 0px)`) ? value : `${value}px`;
 }
 
 /** Values saved by an older version are not validated by the tab; reset invalid ones to the default. */
 export function repairSettings(settings: MarginaliusSettings): void {
 	for (const key of Object.keys(DEFAULT_SETTINGS) as SettingKey[]) {
 		const value = settings[key];
-		if (typeof value !== "string" || !value.trim() || !isLength(value)) {
-			settings[key] = DEFAULT_SETTINGS[key];
-		}
+		const valid = typeof value === "string" && value.trim() && isLength(value);
+		settings[key] = valid ? withUnit(value.trim()) : DEFAULT_SETTINGS[key];
 	}
 }
 
@@ -70,7 +74,7 @@ export class MarginaliusSettingTab extends PluginSettingTab {
 	/** Save through the plugin, so the CSS variables and note placement update too. */
 	async setControlValue(key: string, value: unknown): Promise<void> {
 		const settingKey = key as SettingKey;
-		this.plugin.settings[settingKey] = String(value).trim() || DEFAULT_SETTINGS[settingKey];
+		this.plugin.settings[settingKey] = withUnit(String(value).trim() || DEFAULT_SETTINGS[settingKey]);
 		await this.plugin.saveSettings();
 	}
 }

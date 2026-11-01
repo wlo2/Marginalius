@@ -20,6 +20,9 @@ const indented = new WeakSet<HTMLElement>();
 /** Notes that always stay boxes inside their block (see pinAsBox). */
 const pinned = new WeakSet<HTMLElement>();
 
+/** Columns that are watched, or will be from the next frame on. */
+const watchedColumns = new WeakSet<HTMLElement>();
+
 /**
  * Watches notes (first layout, size changes), the panes they sit in and the
  * text column, whose width changes without the pane's when "Readable line
@@ -37,10 +40,30 @@ function watcher(): ResizeObserver {
 			}
 			const view = viewOf(el);
 			if (view) place(view);
-			else observer?.unobserve(el); // a column no longer in its view
+			else {
+				observer?.unobserve(el); // a column no longer in its view
+				watchedColumns.delete(el);
+			}
 		}
 	});
 	return observer;
+}
+
+/**
+ * Watch `targets` from the next frame on. Inside the observer's callback, a new
+ * target, or a size change it causes on a watched one (a note switching layout,
+ * the column growing with it), is a "ResizeObserver loop" error. The callback
+ * itself must do the work, though: anything later would paint a frame of the
+ * old layout.
+ */
+function watchNextFrame(...targets: HTMLElement[]): void {
+	for (const target of targets) watcher().unobserve(target);
+	targets[0]?.win.requestAnimationFrame(() => {
+		for (const target of targets) {
+			if (target.isConnected) observer?.observe(target);
+			else watchedColumns.delete(target);
+		}
+	});
 }
 
 export function trackNote(note: HTMLElement): void {
@@ -54,7 +77,8 @@ export function untrackNote(note: HTMLElement): void {
 /**
  * Keep a note a box inside its block, never in the margin. For a block that
  * Obsidian clips to its own area: Live Preview callouts get
- * `contain: paint !important`, so a note outside one would not be drawn.
+ * `contain: paint !important` and embeds `overflow: hidden`, so a note outside
+ * one would not be drawn.
  */
 export function pinAsBox(note: HTMLElement): void {
 	pinned.add(note);
@@ -97,6 +121,7 @@ function columnOf(view: HTMLElement): HTMLElement | null {
 
 /** First layout of a note (or a size change): measure it, then place it. Exported for tests. */
 export function measure(note: HTMLElement): void {
+	if (note.closest(".internal-embed")) pinAsBox(note);
 	const view = viewOf(note);
 	const column = view && columnOf(view);
 	if (!view || !column) return;
@@ -126,8 +151,10 @@ export function measure(note: HTMLElement): void {
 		outerEdges.set(note, left ? c.left - n.left : n.right - c.right);
 	}
 
-	watcher().observe(view); // no-op if already observed
-	watcher().observe(column);
+	if (!watchedColumns.has(column)) {
+		watchedColumns.add(column);
+		watchNextFrame(view, column);
+	}
 	place(view, [note]);
 }
 
@@ -136,7 +163,10 @@ export function place(view: HTMLElement, notes?: HTMLElement[]): void {
 	const column = columnOf(view);
 	if (!view.isConnected || !column) {
 		observer?.unobserve(view);
-		if (column) observer?.unobserve(column);
+		if (column) {
+			observer?.unobserve(column);
+			watchedColumns.delete(column);
+		}
 		return;
 	}
 	const v = view.getBoundingClientRect();
@@ -157,6 +187,9 @@ export function place(view: HTMLElement, notes?: HTMLElement[]): void {
 		const outer = outerEdges.get(note);
 		if (outer === undefined) continue;
 		const side = note.classList.contains("marginalia-left") ? "left" : "right";
-		note.classList.toggle(INTRUDES, outer > room[side]);
+		const box = outer > room[side];
+		if (box === note.classList.contains(INTRUDES)) continue;
+		watchNextFrame(note, column);
+		note.classList.toggle(INTRUDES, box);
 	}
 }

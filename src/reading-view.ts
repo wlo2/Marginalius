@@ -1,4 +1,4 @@
-import { Component, MarkdownPostProcessorContext, MarkdownRenderChild } from "obsidian";
+import { Component, editorInfoField, MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownView } from "obsidian";
 import { EditorView } from "@codemirror/view";
 import type MarginaliusPlugin from "./main";
 import { renderNote } from "./note";
@@ -23,27 +23,45 @@ type Match = ReturnType<typeof findMarginalia>[number];
  * rendered again, so list items keep the line numbers task checkboxes need.
  */
 export function registerReadingView(plugin: MarginaliusPlugin): void {
-	// Every section of a render shares one document text; parse it once.
-	let cachedText: string | undefined;
+	// Every section of a render shares one document text; parse it once. An
+	// embed is a render of its own (`docId`), of only the embedded part.
+	let cachedDoc = "";
+	let cachedText = "";
 	let lineStarts: number[] = [];
 	let matches: Match[] = [];
+	// Each file's multi-line notes at its last render, per render.
+	const crossing = new Map<string, string>();
 
 	plugin.registerMarkdownPostProcessor(
 		async (el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
 			const info = ctx.getSectionInfo(el);
 			if (!info) {
-				if (el.querySelector(":scope > .callout")) await addCalloutNotes(plugin, el, ctx);
+				if (el.querySelector(":scope > .callout")) await addCalloutNotes(plugin, el, (child) => ctx.addChild(child));
 				return;
 			}
 
+			// A full re-render keeps the elements of sections whose text did not change.
+			el.removeClass("marginalia-hidden");
+
 			// A full re-render (e.g. after a settings change) passes empty text.
+			// The last text shown can be newer than the saved file.
 			const file = plugin.app.vault.getFileByPath(ctx.sourcePath);
-			const text = info.text || (file ? await plugin.app.vault.cachedRead(file) : "");
-			if (text !== cachedText) {
+			const shown = ctx.docId === cachedDoc ? cachedText : "";
+			const text = info.text || shown || (file ? await plugin.app.vault.cachedRead(file) : "");
+			if (text !== cachedText || ctx.docId !== cachedDoc) {
+				cachedDoc = ctx.docId;
 				cachedText = text;
 				lineStarts = [0];
 				for (let i = text.indexOf("\n"); i !== -1; i = text.indexOf("\n", i + 1)) lineStarts.push(i + 1);
 				matches = findMarginalia(text);
+
+				// Obsidian redraws only the sections whose own text changed, so
+				// not the others a changed note starts in, covers or ends in.
+				const notes = matches.filter((m) => m.content.includes("\n")).map((m) => m.content).join("\0");
+				const render = `${ctx.docId} ${ctx.sourcePath}`;
+				const before = crossing.get(render);
+				crossing.set(render, notes);
+				if (before !== undefined && before !== notes) rerender(plugin, ctx.sourcePath);
 			}
 
 			const section = planSection(matches, lineStarts, info.lineStart, info.lineEnd, text.length);
@@ -70,6 +88,26 @@ export function registerReadingView(plugin: MarginaliusPlugin): void {
 			}
 		}
 	);
+
+	// Obsidian does not redraw the Live Preview callouts open when the plugin loads.
+	plugin.app.workspace.onLayoutReady(() => {
+		plugin.app.workspace.iterateAllLeaves((leaf) => {
+			leaf.view.containerEl.querySelectorAll<HTMLElement>(".cm-callout > .markdown-rendered").forEach((el) => {
+				void addCalloutNotes(plugin, el, (child) => plugin.addChild(child));
+			});
+		});
+	});
+}
+
+/** Redraw the Reading views of a file, once the render that asked for it is over. */
+function rerender(plugin: MarginaliusPlugin, path: string): void {
+	window.setTimeout(() => {
+		plugin.app.workspace.iterateAllLeaves((leaf) => {
+			if (leaf.view instanceof MarkdownView && leaf.view.file?.path === path && leaf.view.getMode() === "preview") {
+				leaf.view.previewMode.rerender(true);
+			}
+		});
+	});
 }
 
 /**
@@ -81,13 +119,13 @@ export function registerReadingView(plugin: MarginaliusPlugin): void {
 async function addCalloutNotes(
 	plugin: MarginaliusPlugin,
 	el: HTMLElement,
-	ctx: MarkdownPostProcessorContext
+	adopt: (child: MarkdownRenderChild) => void
 ): Promise<void> {
 	// The block is attached to the editor right after it is rendered.
 	if (!el.isConnected) await sleep(0);
 	const editor = el.closest<HTMLElement>(".cm-editor");
 	const view = editor && EditorView.findFromDOM(editor);
-	if (!view) return;
+	if (!view || el.querySelector(".marginalia")) return;
 
 	const doc = view.state.doc;
 	const quoted = (line: number) => /^\s*>/.test(doc.line(line).text);
@@ -100,8 +138,9 @@ async function addCalloutNotes(
 
 	cutLeftovers(el, false, notes.length);
 	const child = new MarkdownRenderChild(el);
-	ctx.addChild(child);
-	for (const match of [...notes].reverse()) pinAsBox(addNote(plugin, el, match, ctx.sourcePath, child));
+	adopt(child);
+	const sourcePath = view.state.field(editorInfoField, false)?.file?.path ?? "";
+	for (const match of [...notes].reverse()) pinAsBox(addNote(plugin, el, match, sourcePath, child));
 }
 
 function addNote(

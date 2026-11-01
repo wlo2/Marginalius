@@ -2,12 +2,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { editorInfoField, notices } from "obsidian";
+import { editorInfoField, MarkdownView, notices } from "obsidian";
 import { findMarginalia, markerLength } from "../src/parser";
 import { createMarginaliaLivePreview } from "../src/live-preview";
-import { anchorFor, leftovers, planSection } from "../src/reading-view";
+import { anchorFor, leftovers, planSection, registerReadingView } from "../src/reading-view";
 import { insertMarginalia } from "../src/commands";
 import { measure, place, refreshPlacement } from "../src/placement";
+import { DEFAULT_SETTINGS, repairSettings } from "../src/settings";
 
 /** Single-line stand-in for Obsidian's Editor: a position's `ch` is its offset. */
 function fakeEditor(text: string, selections: [number, number][]) {
@@ -57,6 +58,26 @@ test("parser: markers inside code stay literal", () => {
 		findMarginalia("%%> run `npm test` %%").map((m) => m.content),
 		["run `npm test`"]
 	);
+});
+
+test("parser: code in quotes, indented code and inline triple backticks", () => {
+	const contents = (text: string) => findMarginalia(text).map((m) => m.content);
+	// A fence in a callout, in a nested list or after a tab.
+	assert.deepEqual(contents("> ```\n> %%> in code %%\n> ```\n\n%%> real %%"), ["real"]);
+	assert.deepEqual(contents("- a\n\n    ```\n    %%> in code %%\n    ```\n\n%%> real %%"), ["real"]);
+	assert.deepEqual(contents("\t~~~\n\t%%> in code %%\n\t~~~\n\n%%> real %%"), ["real"]);
+	// Inline code at the start of a line is no fence: notes after it count.
+	assert.deepEqual(contents("```foo``` is code\n\n%%> real %%"), ["real"]);
+	// A fence's info string may not hold backticks, so this one stays a fence.
+	assert.deepEqual(contents("```js\n%%> in code %%\n```"), []);
+});
+
+test("parser: a note in a quote or callout loses the quote's `>` on its later lines", () => {
+	assert.deepEqual(findMarginalia("> %%> one\n> two\n>\n> > three %%").map((m) => m.content), ["one\ntwo\n\nthree"]);
+	// Outside a quote a `>` line is the note's own Markdown.
+	assert.deepEqual(findMarginalia("%%> one\n> two %%").map((m) => m.content), ["one\n> two"]);
+	// The first `%%` ends a note, as in Reading view.
+	assert.deepEqual(findMarginalia("%%> use `%%` here %%").map((m) => m.content), ["use `"]);
 });
 
 test("click target: cursor goes after the marker and its spaces", () => {
@@ -109,6 +130,38 @@ test("reading view: the note text Obsidian left in a section is found for cuttin
 	assert.deepEqual(leftovers("no markers", false, 2), []);
 });
 
+test("reading view: a changed multi-line note redraws its file once, an embed of it does not", async () => {
+	(globalThis as Record<string, unknown>).window = globalThis;
+	let redraws = 0;
+	let process: (el: unknown, ctx: unknown) => Promise<void> = async () => {};
+	const view = Object.assign(new MarkdownView(), {
+		file: { path: "a.md" },
+		getMode: () => "preview",
+		previewMode: { rerender: () => redraws++ },
+	});
+	registerReadingView({
+		registerMarkdownPostProcessor: (processor: typeof process) => (process = processor),
+		app: {
+			vault: { getFileByPath: () => null },
+			workspace: { onLayoutReady: () => {}, iterateAllLeaves: (visit: (leaf: unknown) => void) => visit({ view }) },
+		},
+	} as never);
+	// A section past the notes: only the note's change, not its own text, can redraw it.
+	const render = async (docId: string, text: string) => {
+		const el = { removeClass: () => {} };
+		await process(el, { docId, sourcePath: "a.md", getSectionInfo: () => ({ text, lineStart: 99, lineEnd: 99 }) });
+		await new Promise((resolve) => window.setTimeout(resolve));
+		return redraws;
+	};
+	const note = "%%> two\n\nparagraphs %%";
+	assert.equal(await render("view", note), 0); // first render
+	assert.equal(await render("embed", "just the embedded part"), 0);
+	assert.equal(await render("view", note), 0); // unchanged, though the embed came between
+	assert.equal(await render("view", `x ${note}`), 0); // text before it changed, the note did not
+	assert.equal(await render("view", "no notes left"), 1);
+	assert.equal(await render("view", "no notes left"), 1);
+});
+
 test("insert command: each selection keeps its own text", () => {
 	// "bar" selected backwards: anchor after it, head before it.
 	const two = fakeEditor("foo and bar", [[0, 3], [11, 8]]);
@@ -127,7 +180,16 @@ test("insert command: each selection keeps its own text", () => {
 		insertMarginalia(nested.editor, "left");
 		assert.equal(nested.doc(), "a %%> b %% c");
 	}
-	assert.deepEqual(notices, Array(3).fill("A marginalia note can't go inside another note or comment"));
+	// The same for a plain comment, also when a stray `%%` pairs up the wrong way.
+	for (const selection of [[7, 7], [6, 11], [0, 18]] as [number, number][]) {
+		const comment = fakeEditor("%% private plan %%", [selection]);
+		insertMarginalia(comment.editor, "left");
+		assert.equal(comment.doc(), "%% private plan %%");
+	}
+	const stray = fakeEditor("50%% a %%> b %% c", [[12, 12]]);
+	insertMarginalia(stray.editor, "left");
+	assert.equal(stray.doc(), "50%% a %%> b %% c");
+	assert.deepEqual(notices, Array(7).fill("A marginalia note can't go inside another note or comment"));
 
 	// Right before or after a note is fine.
 	const beside = fakeEditor("a %%> b %% c", [[2, 2], [10, 10]]);
@@ -165,7 +227,28 @@ test("live preview: note drawn at its line start, marker hidden, cursor reveal, 
 	// No notes left: the editor loses its class.
 	state = state.update({ changes: { from: 0, to: state.doc.length, insert: "plain" } }).state;
 	assert.deepEqual(state.facet(EditorView.contentAttributes), [{}]);
+
+	// The second of two notes on a line is drawn after the first, also while
+	// the first is open for editing, so a click on it can tell which one it is.
+	state = state.update({ changes: { from: 0, to: 5, insert: "%%> a %% %%> a %%" }, selection: EditorSelection.cursor(2) }).state;
+	assert.deepEqual(ranges(state), [[0, 0], [8, 8], [9, 17]]);
 });
+
+test("settings: a bare 0 gets a unit, invalid saved values go back to the default", () => {
+	const lengths = ["0", "1.5em", "calc(1.5em + 0px)", "calc(1em + 2px)", "calc(calc(1em + 2px) + 0px)"];
+	(globalThis as Record<string, unknown>).CSS = { supports: (_: string, value: string) => lengths.includes(value.trim()) };
+	const settings = { sidenoteWidth: "0", sidenoteMargin: " 1.5em ", intrusiveWidth: "10px + 5px", paneGap: "calc(1em + 2px)" };
+	repairSettings(settings);
+	assert.deepEqual(settings, {
+		sidenoteWidth: "0px",
+		sidenoteMargin: "1.5em",
+		intrusiveWidth: DEFAULT_SETTINGS.intrusiveWidth,
+		paneGap: "calc(1em + 2px)",
+	});
+});
+
+/** Callbacks waiting for the next frame. */
+const frames: (() => void)[] = [];
 
 /** Stand-ins for the browser layout APIs placement.ts reads. */
 function fakeBox<T extends object>(left: number, right: number, extra = {} as T) {
@@ -174,6 +257,7 @@ function fakeBox<T extends object>(left: number, right: number, extra = {} as T)
 	return {
 		...extra,
 		isConnected: true,
+		win: { requestAnimationFrame: (callback: () => void) => frames.push(callback) },
 		padding: "0px",
 		getBoundingClientRect: () => rect,
 		move: (l: number, r: number) => (rect = { left: l, right: r }),
@@ -186,6 +270,7 @@ function fakeNote(side: "left" | "right", left: number, right: number) {
 	const classes = new Set(["marginalia", `marginalia-${side}`]);
 	return fakeBox(left, right, {
 		classList: {
+			add: (c: string) => classes.add(c),
 			contains: (c: string) => classes.has(c),
 			toggle: (c: string, on: boolean) => (on ? classes.add(c) : classes.delete(c)),
 			remove: (c: string) => classes.delete(c),
@@ -220,8 +305,9 @@ test("placement: free space leaves the pane edge gap; a note that no longer fits
 	const left = fakeNote("left", 64, 230); // in the list item, reaches 186px out
 	const notes = [right, left];
 	const view = fakeBox(0, 1200, { querySelector: () => column, querySelectorAll: () => notes });
-	Object.assign(right, { parentElement: { closest: () => section }, closest: (s: string) => (s.includes("markdown-source-view") ? view : section) });
-	Object.assign(left, { parentElement: { closest: () => item }, closest: (s: string) => (s.includes("markdown-source-view") ? view : section) });
+	const closest = (s: string) => (s === ".internal-embed" ? null : s.includes("markdown-source-view") ? view : section);
+	Object.assign(right, { parentElement: { closest: () => section }, closest });
+	Object.assign(left, { parentElement: { closest: () => item }, closest });
 	const isBox = (n: ReturnType<typeof fakeNote>) => n.classList.contains("marginalia-intrudes");
 
 	measure(right as never);
@@ -230,6 +316,11 @@ test("placement: free space leaves the pane edge gap; a note that no longer fits
 	assert.equal(left.cssProp("--marginalius-list-indent"), "34px");
 	assert.equal(isBox(right), false);
 	assert.equal(isBox(left), false);
+
+	// Not watched inside the observer's callback: that is a "ResizeObserver loop" error.
+	assert.equal(observed.has(column), false);
+	frames.splice(0).forEach((frame) => frame());
+	assert.ok(observed.has(view) && observed.has(column));
 
 	// A sidebar widens: 1150px pane leaves 170px on the right, so the right note becomes a box.
 	view.move(0, 1150);
@@ -243,8 +334,17 @@ test("placement: free space leaves the pane edge gap; a note that no longer fits
 	refreshPlacement([{ querySelectorAll: () => [view] } as never]);
 	assert.equal(isBox(right), false);
 
+	// A note in an embed stays a box: the embed clips anything outside it.
+	const embedded = fakeNote("right", 970, 1100);
+	Object.assign(embedded, {
+		parentElement: { closest: () => section },
+		closest: (s: string) => (s === ".internal-embed" ? {} : closest(s)),
+	});
+	measure(embedded as never);
+	assert.equal(isBox(embedded), true);
+	assert.equal(embedded.cssProp("--marginalius-room-right"), "0px");
+
 	// "Readable line length" off and on resizes only the column, which is watched too.
-	assert.ok(observed.has(column));
 	let readable = false;
 	Object.assign(column, {
 		classList: { contains: () => false },

@@ -12,6 +12,10 @@ export class MarkdownRenderChild extends Component {
 	}
 }
 
+export class MarkdownView {}
+
+export class PluginSettingTab {}
+
 export const notices: string[] = [];
 export class Notice {
 	constructor(message: string) {

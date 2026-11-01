@@ -52,10 +52,12 @@ class MarginaliaWidget extends WidgetType {
 			// Links inside the note and right/middle clicks behave as usual.
 			if (evt.button !== 0 || (evt.target as HTMLElement).closest("a")) return;
 			evt.preventDefault();
-			// The widget sits at the start of the marker's line; find the marker.
-			const line = view.state.doc.lineAt(view.posAtDOM(el));
+			// The widget sits before its marker, after any earlier note on the
+			// line, which may be identical to this one.
+			const widgetPos = view.posAtDOM(el);
+			const line = view.state.doc.lineAt(widgetPos);
 			const marker = findMarginalia(view.state.sliceDoc(line.from), line.from).find(
-				(m) => m.side === this.side && m.content === this.content
+				(m) => m.from >= widgetPos && m.side === this.side && m.content === this.content
 			);
 			if (!marker) return;
 			const from = marker.from;
@@ -92,6 +94,15 @@ function buildDecorations(state: EditorState, app: App): DecorationSet {
 
 	let previousEnd = 0;
 	for (const match of findMarginalia(state.doc.toString())) {
+		// Hide the marker where it is, and draw the note at the start of its
+		// line: a box then floats from the top of the paragraph instead of
+		// from wherever the marker sits in it. The margin note is centered on
+		// the line either way. (After an earlier note ending on this line, so
+		// the widget is not inside that note's hidden range, and a click on it
+		// finds this note.)
+		const lineStart = Math.max(state.doc.lineAt(match.from).from, previousEnd);
+		previousEnd = match.to;
+
 		// Reveal the raw source whenever the cursor/selection touches the
 		// marginalia so it can be edited.
 		const isBeingEdited = selection.ranges.some(
@@ -99,18 +110,11 @@ function buildDecorations(state: EditorState, app: App): DecorationSet {
 		);
 		if (isBeingEdited) continue;
 
-		// Hide the marker where it is, and draw the note at the start of its
-		// line: a box then floats from the top of the paragraph instead of
-		// from wherever the marker sits in it. The margin note is centered on
-		// the line either way. (After an earlier note ending on this line, so
-		// the widget is not inside that note's hidden range.)
-		const lineStart = Math.max(state.doc.lineAt(match.from).from, previousEnd);
 		const widget = new MarginaliaWidget(match.content, match.side, app, sourcePath);
 		// The class lets styles.css open the line's overflow without `:has()`.
 		decorations.push(noteLine.range(state.doc.lineAt(lineStart).from));
 		decorations.push(Decoration.widget({ widget, side: -1 }).range(lineStart));
 		decorations.push(Decoration.replace({}).range(match.from, match.to));
-		previousEnd = match.to;
 	}
 
 	return Decoration.set(decorations, true);

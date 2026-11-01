@@ -1,6 +1,6 @@
 {
 	"name": "marginalius",
-	"version": "0.2.5",
+	"version": "0.3.0",
 	"description": "Show adaptive marginalia.",
 	"main": "main.js",
 	"type": "module",
